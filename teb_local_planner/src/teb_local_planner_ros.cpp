@@ -559,8 +559,8 @@ void TebLocalPlannerROS::updateObstacleContainerWithCustomObstacles()
     {
       geometry_msgs::msg::TransformStamped obstacle_to_map = tf_->lookupTransform(
                   global_frame_, tf2::timeFromSec(0),
-                  custom_obstacle_msg_.header.frame_id, tf2::timeFromSec(0),
-                  custom_obstacle_msg_.header.frame_id, tf2::durationFromSec(0.5));
+                  custom_obstacle_msg_.header.frame_id, tf2::TimePointZero,
+                  custom_obstacle_msg_.header.frame_id);
       obstacle_to_map_eig = tf2::transformToEigen(obstacle_to_map);
       //tf2::fromMsg(obstacle_to_map.transform, obstacle_to_map_eig);
     }
@@ -664,7 +664,10 @@ bool TebLocalPlannerROS::pruneGlobalPlan(const geometry_msgs::msg::PoseStamped& 
     //geometry_msgs::msg::TransformStamped global_to_plan_transform = tf_->lookupTransform(global_plan.front().header.frame_id, global_pose.header.frame_id, tf2::timeFromSec(0));
     geometry_msgs::msg::PoseStamped robot = tf_->transform(
               global_pose,
-              global_plan.front().header.frame_id);
+              global_plan.front().header.frame_id,
+              tf2::TimePointZero,
+              global_plan.front().header.frame_id
+              );
 
     //robot.setData( global_to_plan_transform * global_pose );
     
@@ -698,7 +701,8 @@ bool TebLocalPlannerROS::pruneGlobalPlan(const geometry_msgs::msg::PoseStamped& 
   }
   return true;
 }
-      
+
+//void abc(const tf2_ros::TransformStampedFuture &trsf){ std::cout << "tf ok" << std::endl;}
 
 bool TebLocalPlannerROS::transformGlobalPlan(const std::vector<geometry_msgs::msg::PoseStamped>& global_plan,
                   const geometry_msgs::msg::PoseStamped& global_pose, const nav2_costmap_2d::Costmap2D& costmap, const std::string& global_frame, double max_plan_length,
@@ -721,20 +725,18 @@ bool TebLocalPlannerROS::transformGlobalPlan(const std::vector<geometry_msgs::ms
 
     // get plan_to_global_transform from plan frame to global_frame
     geometry_msgs::msg::TransformStamped plan_to_global_transform = tf_->lookupTransform(
-                global_frame, tf2_ros::fromMsg(plan_pose.header.stamp),
-                plan_pose.header.frame_id, tf2::timeFromSec(0),
-                plan_pose.header.frame_id, tf2::durationFromSec(0.5));
-
-//    tf_->waitForTransform(global_frame, ros::Time::now(),
-//    plan_pose.header.frame_id, plan_pose.header.stamp,
-//    plan_pose.header.frame_id, ros::Duration(0.5));
-//    tf_->lookupTransform(global_frame, ros::Time(),
-//    plan_pose.header.frame_id, plan_pose.header.stamp,
-//    plan_pose.header.frame_id, plan_to_global_transform);
-
+                global_frame,
+                plan_pose.header.frame_id,
+                tf2::TimePointZero);
+    geometry_msgs::msg::TransformStamped plan_to_global_transform_inv = tf_->lookupTransform(
+                plan_pose.header.frame_id,
+                global_frame,
+                tf2::TimePointZero);
+                
     //let's get the pose of the robot in the frame of the plan
-    geometry_msgs::msg::PoseStamped robot_pose = tf_->transform(global_pose, plan_pose.header.frame_id);
-
+    geometry_msgs::msg::PoseStamped robot_pose;
+    tf2::doTransform(global_pose, robot_pose, plan_to_global_transform_inv);
+    
     //we'll discard points on the plan that are outside the local costmap
     double dist_threshold = std::max(costmap.getSizeInCellsX() * costmap.getResolution() / 2.0,
                                      costmap.getSizeInCellsY() * costmap.getResolution() / 2.0);
